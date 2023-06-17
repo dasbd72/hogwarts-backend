@@ -5,6 +5,6 @@ type Status struct {
 	Y float32 `json:"y"`
 }
 
-func defaultStatus() Status {
+func DefaultStatus() Status {
 	return Status{X: 0, Y: 0}
 }

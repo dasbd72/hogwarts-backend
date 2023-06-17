@@ -1,16 +1,16 @@
 package main
 
 type Room struct {
-	Exist    bool              `json:"exist"`
-	Host     User              `json:"host"`
-	Players  []User            `json:"players"`
-	Actions  map[string]Action `json:"actions"`
-	Statuses map[string]Status `json:"statuses"`
+	Exist    bool                    `json:"exist"`
+	Host     User                    `json:"host"`
+	Players  []User                  `json:"players"`
+	Actions  map[string]*ActionQueue `json:"actions"`
+	Statuses map[string]Status       `json:"statuses"`
 }
 
 // Get default room
 func defaultRoom() Room {
-	return Room{Exist: false, Host: User{}, Players: []User{}, Actions: make(map[string]Action), Statuses: make(map[string]Status)}
+	return Room{Exist: false, Host: User{}, Players: []User{}, Actions: make(map[string]*ActionQueue), Statuses: make(map[string]Status)}
 }
 
 // Add user to room
@@ -20,7 +20,7 @@ func (room *Room) AddUser(user User) {
 		room.Host = user
 	}
 	room.Players = append(room.Players, user)
-	room.Actions[user.UserID] = Action{}
+	room.Actions[user.UserID] = DefaultActionQueue()
 	room.Statuses[user.UserID] = Status{}
 }
 
