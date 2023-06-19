@@ -25,12 +25,12 @@ func init() {
 
 	// Create room 0 with host "1" and player "1", "2"
 	actions := make(map[string]*ActionQueue)
-	statuses := make(map[string]Status)
+	statuses := DefaultStatuses()
 	actions["1"] = DefaultActionQueue()
-	statuses["1"] = DefaultStatus()
+	statuses.Players["1"] = DefaultPlayerStatus()
 	actions["2"] = DefaultActionQueue()
-	statuses["2"] = DefaultStatus()
-	room := Room{Exist: true, Host: User{UserID: "1"}, Players: []User{{UserID: "1"}, {UserID: "2"}}, Actions: actions, Statuses: statuses}
+	statuses.Players["2"] = DefaultPlayerStatus()
+	room := Room{Actions: actions, Statuses: statuses}
 
 	mu_rooms[0].Lock()
 	defer mu_rooms[0].Unlock()
@@ -41,8 +41,6 @@ func init() {
 func main() {
 	http.HandleFunc("/ping", ping)
 	http.HandleFunc("/createroom", createRoom)
-	http.HandleFunc("/joinroom", joinRoom)
-	http.HandleFunc("/leaveroom", leaveRoom)
 	http.HandleFunc("/action", action)
 	http.HandleFunc("/update", update)
 	http.HandleFunc("/getactions", getActions)
@@ -82,7 +80,7 @@ func createRoom(w http.ResponseWriter, r *http.Request) {
 
 	mu_n_rooms.Lock()
 	roomID := n_rooms
-	n_rooms++
+	n_rooms = (n_rooms + 1) % MAX_ROOMS
 	mu_n_rooms.Unlock()
 
 	mu_rooms[n_rooms].Lock()
@@ -90,65 +88,9 @@ func createRoom(w http.ResponseWriter, r *http.Request) {
 
 	// Create the room
 	rooms[roomID] = defaultRoom()
-	rooms[roomID].AddUser(User{UserID: req.UserID})
 
 	// Return the room
 	res.RoomID = roomID
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(res)
-}
-
-func joinRoom(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-
-	var req struct {
-		UserID string `json:"userID"`
-		RoomID int    `json:"roomID"`
-	}
-	var res struct {
-		RoomID int `json:"roomID"`
-	}
-
-	// Parse the request
-	err := json.NewDecoder(r.Body).Decode(&req)
-	if err != nil {
-		panic(err)
-	}
-
-	mu_rooms[req.RoomID].Lock()
-	defer mu_rooms[req.RoomID].Unlock()
-
-	// Add the user to the room
-	rooms[req.RoomID].AddUser(User{UserID: req.UserID})
-
-	// Return the room
-	res.RoomID = req.RoomID
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(res)
-}
-
-func leaveRoom(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-
-	var req struct {
-		UserID string `json:"userID"`
-		RoomID int    `json:"roomID"`
-	}
-	var res struct {
-	}
-
-	// Parse the request
-	err := json.NewDecoder(r.Body).Decode(&req)
-	if err != nil {
-		panic(err)
-	}
-
-	mu_rooms[req.RoomID].Lock()
-	defer mu_rooms[req.RoomID].Unlock()
-
-	// Remove the user from the room
-	rooms[req.RoomID].RemoveUser(User{UserID: req.UserID})
-
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(res)
 }
@@ -173,22 +115,12 @@ func action(w http.ResponseWriter, r *http.Request) {
 	mu_rooms[req.RoomID].Lock()
 	defer mu_rooms[req.RoomID].Unlock()
 
-	// // Check if the room exists
-	// if !rooms[req.RoomID].Exist {
-	// 	w.WriteHeader(http.StatusNotFound)
-	// 	return
-	// }
-
 	// Check if action queue exists
 	if _, ok := rooms[req.RoomID].Actions[req.UserID]; !ok {
 		rooms[req.RoomID].Actions[req.UserID] = DefaultActionQueue()
 	}
 	// Update the action
 	rooms[req.RoomID].Actions[req.UserID].Push(req.Action)
-	// Set status to default if not exists
-	if _, ok := rooms[req.RoomID].Statuses[req.UserID]; !ok {
-		rooms[req.RoomID].Statuses[req.UserID] = DefaultStatus()
-	}
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(res)
@@ -198,9 +130,9 @@ func update(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 
 	var req struct {
-		UserID   string            `json:"userID"`
-		RoomID   int               `json:"roomID"`
-		Statuses map[string]Status `json:"statuses"`
+		UserID   string   `json:"userID"`
+		RoomID   int      `json:"roomID"`
+		Statuses Statuses `json:"statuses"`
 	}
 	var res struct {
 	}
@@ -214,21 +146,10 @@ func update(w http.ResponseWriter, r *http.Request) {
 	mu_rooms[req.RoomID].Lock()
 	defer mu_rooms[req.RoomID].Unlock()
 
-	// // Check if the room exists
-	// if !rooms[req.RoomID].Exist {
-	// 	w.WriteHeader(http.StatusNotFound)
-	// 	return
-	// }
-
-	// // Check if the user is the host
-	// if req.UserID != rooms[req.RoomID].Host.UserID {
-	// 	w.WriteHeader(http.StatusUnauthorized)
-	// 	return
-	// }
-
 	// Update all player statuses
-	for userID, status := range req.Statuses {
-		rooms[req.RoomID].Statuses[userID] = status
+	rooms[req.RoomID].Statuses = req.Statuses
+
+	for userID := range req.Statuses.Players {
 		// if no player action is set, set it to default
 		if _, ok := rooms[req.RoomID].Actions[userID]; !ok {
 			rooms[req.RoomID].Actions[userID] = DefaultActionQueue()
@@ -271,7 +192,7 @@ func getStatuses(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		RoomID int `json:"roomID"`
 	}
-	var res map[string]Status
+	var res Statuses
 
 	// Parse the request
 	err := json.NewDecoder(r.Body).Decode(&req)
