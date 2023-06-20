@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"net/http"
 	"sync"
@@ -31,10 +32,20 @@ var (
 )
 
 func main() {
+	http.HandleFunc("/", index)
 	http.HandleFunc("/server", server)
 	http.HandleFunc("/client", client)
 
-	log.Fatal(http.ListenAndServe(":8081", nil))
+	go http.ListenAndServeTLS(":https", "go-server.crt", "go-server.key", nil)
+	log.Fatal(http.ListenAndServe(":http", nil))
+}
+
+func index(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path != "/" {
+		http.NotFound(w, r)
+		return
+	}
+	fmt.Fprint(w, "Hello, World!")
 }
 
 func server(w http.ResponseWriter, r *http.Request) {
