@@ -32,12 +32,28 @@ var (
 )
 
 func main() {
+	// certManager := autocert.Manager{
+	// 	Prompt:     autocert.AcceptTOS,
+	// 	HostPolicy: autocert.HostWhitelist("dasbd72.com", "hogwarts.dasbd72.com"),
+	// 	Cache:      autocert.DirCache("certs"),
+	// }
+
+	// s := &http.Server{
+	// 	Addr: ":https",
+	// 	TLSConfig: &tls.Config{
+	// 		GetCertificate: certManager.GetCertificate,
+	// 	},
+	// }
+
 	http.HandleFunc("/", index)
 	http.HandleFunc("/server", server)
 	http.HandleFunc("/client", client)
 
 	go http.ListenAndServeTLS(":https", "go-server.crt", "go-server.key", nil)
 	log.Fatal(http.ListenAndServe(":http", nil))
+
+	// go http.ListenAndServe(":http", certManager.HTTPHandler(nil))
+	// log.Fatal(s.ListenAndServeTLS("", ""))
 }
 
 func index(w http.ResponseWriter, r *http.Request) {

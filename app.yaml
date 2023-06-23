@@ -1,14 +1,17 @@
-runtime: go
-runtime_config:
-  operating_system: "ubuntu22"
-  runtime_version: "1.20"
-network:
-  forwarded_ports: 
-    - 8081/tcp
-resources:
-  cpu: 2
-  memory_gb: 1
-  disk_size_gb: 10
+runtime: go120
+
+instance_class: F2
+
+main: ./cmd/websocket-server
+
 automatic_scaling:
-  min_num_instances: 1
-  max_num_instances: 1
+  max_instances: 1
+  min_instances: 1
+
+handlers:
+- url: /server
+  script: auto
+  secure: always
+- url: /client
+  script: auto
+  secure: always
